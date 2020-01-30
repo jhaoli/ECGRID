@@ -1,0 +1,69 @@
+module allocator_mod
+
+  use mesh_mod
+
+  implicit none
+
+  private
+
+  public allocate_array
+
+  interface allocate_array
+    module procedure allocate_array_1d_r8
+    module procedure allocate_array_2d_r8
+  end interface allocate_array
+
+contains
+  
+  subroutine allocate_array_1d_r8(mesh, array, full_lon, half_lon, full_lat, half_lat)
+
+    type(mesh_type), intent(in )              :: mesh
+    real(8)       , intent(out), allocatable :: array(:)
+    logical        , intent(in ), optional    :: full_lon
+    logical        , intent(in ), optional    :: half_lon
+    logical        , intent(in ), optional    :: full_lat
+    logical        , intent(in ), optional    :: half_lat
+
+    if (allocated(array)) deallocate(array)
+
+    if (present(full_lon) .and. full_lon) then
+      allocate(array(mesh%full_lon_lb:mesh%full_lon_ub))
+    else if (present(half_lon) .and. half_lon) then
+      allocate(array(mesh%half_lon_lb:mesh%half_lon_ub))
+    else if (present(full_lat) .and. full_lat) then
+      allocate(array(mesh%full_lat_lb:mesh%full_lat_ub))
+    else if (present(half_lat) .and. half_lat) then
+      allocate(array(mesh%half_lat_lb:mesh%half_lat_ub))
+    end if
+    array = 0.0d0
+
+  end subroutine allocate_array_1d_r8
+
+  subroutine allocate_array_2d_r8(mesh, array, full_lon, half_lon, full_lat, half_lat)
+
+    type(mesh_type), intent(in )              :: mesh
+    real(8)        , intent(out), allocatable :: array(:,:)
+    logical        , intent(in ), optional    :: full_lon
+    logical        , intent(in ), optional    :: half_lon
+    logical        , intent(in ), optional    :: full_lat
+    logical        , intent(in ), optional    :: half_lat  
+
+    if (allocated(array)) deallocate(array)   
+
+    if (present(full_lon) .and. present(full_lat)) then
+      if (full_lon .and. full_lat) allocate(array(mesh%full_lon_lb:mesh%full_lon_ub, mesh%full_lat_lb:mesh%full_lat_ub))
+    else if (present(full_lon) .and. present(half_lat)) then
+      if (full_lon .and. half_lat) allocate(array(mesh%full_lon_lb:mesh%full_lon_ub, mesh%half_lat_lb:mesh%half_lat_ub))
+    else if (present(half_lon) .and. present(full_lat)) then
+      if (half_lon .and. full_lat) allocate(array(mesh%half_lon_lb:mesh%half_lon_ub, mesh%full_lat_lb:mesh%full_lat_ub))
+    else if (present(half_lon) .and. present(half_lat)) then
+      if (half_lon .and. half_lat) allocate(array(mesh%half_lon_lb:mesh%half_lon_ub, mesh%half_lat_lb:mesh%half_lat_ub))
+    else
+      allocate(array(mesh%full_lon_lb:mesh%full_lon_ub, mesh%full_lat_lb:mesh%full_lat_ub))
+    end if
+
+    array = 0.0d0  
+
+  end subroutine allocate_array_2d_r8
+
+end module allocator_mod
