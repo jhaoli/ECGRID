@@ -74,21 +74,22 @@ contains
       splitter => no_splitting
       call log_notice('No fast-slow split.')
     end select
+    
+    call time_add_alert('print', days=1.0_r8)
 
   end subroutine ecgrid_init
   
   subroutine ecgrid_run()
 
-    call operators_prepare_all(states(old))
+    call operators_prepare(states(old))
     call diagnose(states(old))
     call output(states(old), tends(old))
-    call log_print_diag(curr_time%isoformat())
 
     do while (.not. time_is_finished())
       call time_integrate(dt, static, tends, states)
       if (time_is_alerted('print')) call log_print_diag(curr_time%isoformat())
       call time_advance()
-      call operators_prepare_all(states(old))
+      call operators_prepare(states(old))
       call diagnose(states(old))
       call output(states(old), tends(old))
     end do
@@ -118,6 +119,7 @@ contains
     
     type(mesh_type), pointer :: mesh
     integer i, j
+    real(r8) vor
 
     mesh => state%mesh
 
@@ -139,17 +141,27 @@ contains
     call log_add_diag('total_e' , state%total_e)
 
     state%total_pv = 0.0_r8
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        state%total_pv = state%total_pv + state%m_vtx(i,j) * state%pv(i,j) * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
+#ifdef V_POLE
+        vor = (state%v(i+1,j) - state%v(i,j)) / mesh%dlon - &
+              (state%u(i,j  ) * mesh%full_cos_lat(j  ) -&
+               state%u(i,j-1) * mesh%full_cos_lat(j-1)) / mesh%dlat                       
+        ! state%total_pv = state%total_pv + state%m_vtx(i,j) * state%pv(i,j) * mesh%half_cos_lat(j) * radius**2 * 
+#else
+        vor = (state%v(i+1,j) - state%v(i,j)) / mesh%dlon - &
+              (state%u(i,j+1) * mesh%full_cos_lat(j+1) -&
+               state%u(i,j  ) * mesh%full_cos_lat(j  )) / mesh%dlat
+#endif
+        state%total_pv = state%total_pv + vor * radius * mesh%dlon * mesh%dlat
       end do
     end do
-    call log_add_diag('total_pv' , state%total_pv)
+    ! call log_add_diag('total_pv' , state%total_pv)
 
     state%total_pe = 0.0_r8
     do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        state%total_pe = state%total_pe + state%m_vtx(i,j) * state%pv(i,j)**2 * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
+        state%total_pe = state%total_pe + 0.5_r8 * state%m_vtx(i,j) * state%pv(i,j)**2 * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
       end do
     end do
     call log_add_diag('total_pe' , state%total_pe)
@@ -167,7 +179,7 @@ contains
     type(mesh_type), pointer :: mesh 
     integer i, j
 
-    call operators_prepare_all(state)
+    call operators_prepare(state)
 
     mesh => state%mesh
     select case(pass)
@@ -196,7 +208,7 @@ contains
       end do
     end select
   
-    call debug_check_space_operators(static, state, tend)
+    ! call debug_check_space_operators(static, state, tend)
 
   end subroutine space_operators
 

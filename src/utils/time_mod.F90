@@ -1,7 +1,6 @@
 module time_mod
 
-  use datetime_mod
-  use timedelta_mod
+  use datetime
   use hash_table_mod
   use const_mod
 

@@ -68,7 +68,7 @@ contains
       end do
       state%vor_np = state%vor_np / mesh%num_half_lon / (radius * mesh%dlat * 0.5_r8)
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        state%pv(i,j) = (state%vor_sp + mesh%half_f(j)) / state%m_vtx(i,j)
+        state%pv(i,j) = (state%vor_np + mesh%half_f(j)) / state%m_vtx(i,j)
       end do
     endif
 #endif

@@ -36,21 +36,6 @@ contains
 #endif      
       end do
     end do
-! #ifdef V_POLE
-!     j = mesh%full_lat_start_idx
-!     do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-!       state%ke(i,j) = ((state%u(i,j  )**2 + state%u(i-1,j)**2) +&
-!                        (state%v(i,j+1)**2 * mesh%half_cos_lat(j+1) * 0.5_r8 &
-!                       ) / mesh%full_cos_lat(j)) * 0.25_r8 
-!     end do
-!     j = mesh%full_lat_end_idx
-!     do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-!       state%ke(i,j) = ((state%u(i,j  )**2 + state%u(i-1,j)**2) +&
-!                        (state%v(i,j-1)**2 * mesh%half_cos_lat(j-1) * 0.5_r8 &
-!                       ) / mesh%full_cos_lat(j)) * 0.25_r8 
-!     end do 
-! #endif
-
 
 #ifndef V_POLE
     if (mesh%has_south_pole()) then
