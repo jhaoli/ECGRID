@@ -51,9 +51,13 @@ contains
       end do
     end do 
 
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
+#ifdef V_POLE
+        state%m_lat(i,j) = (state%gd(i,j) + state%gd(i,j-1)) * 0.5_r8
+#else
         state%m_lat(i,j) = (state%gd(i,j) + state%gd(i,j+1)) * 0.5_r8
+#endif
       end do
     end do
 
@@ -65,15 +69,44 @@ contains
     type(mesh_type), pointer :: mesh
 
     integer i, j
+    real(r8) pole
  
     mesh => state%mesh
 
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        state%m_vtx(i,j) = ((state%gd(i,j  ) + state%gd(i+1,j  )) * mesh%full_cos_lat(j  ) +&
-                            (state%gd(i,j+1) + state%gd(i+1,j+1)) * mesh%full_cos_lat(j+1)) * 0.25_r8
+        state%m_vtx(i,j) = (state%gd(i,j  ) + state%gd(i+1,j  ) +&
+#ifdef V_POLE
+                            state%gd(i,j-1) + state%gd(i+1,j-1)) * 0.25_r8
+#else
+                            state%gd(i,j+1) + state%gd(i+1,j+1)) * 0.25_r8
+#endif
       end do
     end do
+#ifdef V_POLE
+    if (mesh%has_south_pole()) then
+      j = mesh%half_lat_start_idx
+      pole = 0.0_r8
+      do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
+        pole = pole + state%gd(i,j)
+      end do
+      pole = pole / mesh%num_half_lon
+      do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
+        state%m_vtx(i,j) = pole
+      end do
+    endif
+    if(mesh%has_north_pole()) then
+      j = mesh%half_lat_end_idx
+      pole = 0.0_r8
+      do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
+        pole = pole + state%gd(i,j-1)
+      end do
+      pole = pole / mesh%num_half_lon
+      do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
+        state%m_vtx(i,j) = pole
+      end do
+    endif
+#endif
 
   end subroutine calc_m_vtx
  
@@ -91,16 +124,17 @@ contains
       end do
     end do
     call parallel_fill_halo(state%mesh, state%mf_lon_n)
+#ifndef V_POLE
     !! calculate the mass flux on u-grid using Gauss elimination method
-
     if (mesh%has_south_pole()) then
       ! call calc_mf_lon_n_south_pole(state)
     end if 
     if (mesh%has_north_pole()) then
       ! call calc_mf_lon_n_north_pole(state)
     end if
+#endif
 
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
         state%mf_lat_n(i,j) = state%m_lat(i,j) * state%v(i,j)
       end do
@@ -131,7 +165,7 @@ contains
     do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
       pole_const = pole_const + state%mf_lat_n(i,j) * mesh%half_cos_lat(j)
     end do
-    pole_const = pole_const * 2.0_r8 / mesh%num_full_lon * mesh%dlon / mesh%dlat
+    pole_const = pole_const / mesh%num_full_lon * mesh%dlon / mesh%dlat
     
     do k = 1, mesh%num_half_lon
    	  do i = 1, mesh%num_half_lon
@@ -184,7 +218,7 @@ contains
     do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
       pole_const = pole_const - state%mf_lat_n(i,j-1) * mesh%half_cos_lat(j-1)
     end do
-    pole_const = pole_const * 2.0_r8 / mesh%num_full_lon * mesh%dlon / mesh%dlat
+    pole_const = pole_const / mesh%num_full_lon * mesh%dlon / mesh%dlat
     
     do k = 1, mesh%num_half_lon
    	  do i = 1, mesh%num_half_lon
@@ -237,10 +271,15 @@ contains
       end do
     end do
 
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
     	do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-        tend%qhu(i,j) = state%pv_lat(i,j) * (state%mf_lon_n(i,j  ) + state%mf_lon_n(i+1,j  ) +&
-                                             state%mf_lon_n(i,j+1) + state%mf_lon_n(i+1,j+1)) * 0.25_r8
+#ifdef V_POLE
+        tend%qhu(i,j) = state%pv_lat(i,j) * (state%mf_lon_n(i-1,j  ) + state%mf_lon_n(i,j  ) +&
+                                             state%mf_lon_n(i-1,j-1) + state%mf_lon_n(i,j-1)) * 0.25_r8
+#else
+        tend%qhu(i,j) = state%pv_lat(i,j) * (state%mf_lon_n(i-1,j  ) + state%mf_lon_n(i,j  ) +&
+                                             state%mf_lon_n(i-1,j+1) + state%mf_lon_n(i,j+1)) * 0.25_r8
+#endif
       end do
     end do
   end subroutine calc_qhu_qhv
@@ -256,32 +295,48 @@ contains
 
     mesh => state%mesh
 
+#ifndef V_POLE
     ! mirror potential vorticity
-    j = mesh%half_lat_end_idx+1
-    state%pv(:,j) = state%pv(:,j-1)
-    call parallel_fill_halo(mesh, state%pv(:,j))
-    j = mesh%half_lat_start_idx-1
-    state%pv(:,j) = state%pv(:,j+1)
-    call parallel_fill_halo(mesh, state%pv(:,j))
+    j = mesh%half_lat_end_idx
+    state%pv(:,j+1) = state%pv(:,j)
+ 
+    j = mesh%half_lat_start_idx
+    state%pv(:,j-1) = state%pv(:,j)
+#endif
 
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        tend%qhv(i,j) = ((state%mf_lat_n(i  ,j  ) * mesh%half_cos_lat(j  ) * (state%pv(i-1,j  ) + state%pv(i  ,j  ) + state%pv(i,j-1)) / 3.0_r8 + &
-                          state%mf_lat_n(i+1,j  ) * mesh%half_cos_lat(j  ) * (state%pv(i  ,j  ) + state%pv(i+1,j  ) + state%pv(i,j-1)) / 3.0_r8 + &
-                          state%mf_lat_n(i  ,j-1) * mesh%half_cos_lat(j-1) * (state%pv(i-1,j-1) + state%pv(i  ,j-1) + state%pv(i,j  )) / 3.0_r8 + &
-                          state%mf_lat_n(i+1,j-1) * mesh%half_cos_lat(j-1) * (state%pv(i  ,j-1) + state%pv(i+1,j-1) + state%pv(i,j  )) / 3.0_r8)) * 0.25_r8 / &
+#ifdef V_POLE
+        tend%qhv(i,j) = ((state%mf_lat_n(i  ,j  ) * mesh%half_cos_lat(j  ) * (state%pv(i-1,j  ) + state%pv(i,j  ) + state%pv(i,j+1)) / 3.0_r8 + &
+                          state%mf_lat_n(i+1,j  ) * mesh%half_cos_lat(j  ) * (state%pv(i+1,j  ) + state%pv(i,j  ) + state%pv(i,j+1)) / 3.0_r8 + &
+                          state%mf_lat_n(i  ,j+1) * mesh%half_cos_lat(j+1) * (state%pv(i-1,j+1) + state%pv(i,j+1) + state%pv(i,j  )) / 3.0_r8 + &
+                          state%mf_lat_n(i+1,j+1) * mesh%half_cos_lat(j+1) * (state%pv(i+1,j+1) + state%pv(i,j+1) + state%pv(i,j  )) / 3.0_r8)) * 0.25_r8 / &
+#else
+        tend%qhv(i,j) = ((state%mf_lat_n(i  ,j  ) * mesh%half_cos_lat(j  ) * (state%pv(i-1,j  ) + state%pv(i,j  ) + state%pv(i,j-1)) / 3.0_r8 + &
+                          state%mf_lat_n(i+1,j  ) * mesh%half_cos_lat(j  ) * (state%pv(i+1,j  ) + state%pv(i,j  ) + state%pv(i,j-1)) / 3.0_r8 + &  
+                          state%mf_lat_n(i  ,j-1) * mesh%half_cos_lat(j-1) * (state%pv(i-1,j-1) + state%pv(i,j-1) + state%pv(i,j  )) / 3.0_r8 + &
+                          state%mf_lat_n(i+1,j-1) * mesh%half_cos_lat(j-1) * (state%pv(i+1,j-1) + state%pv(i,j-1) + state%pv(i,j  )) / 3.0_r8)) * 0.25_r8 / &
+#endif
                         mesh%full_cos_lat(j)
       end do
     end do
 
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
     	do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-        tend%qhu(i,j) = (state%mf_lon_n(i-1,j+1) * (state%pv(i-1,j) + state%pv(i-1,j+1) + state%pv(i,j  )) / 3.0_r8 +&
-                         state%mf_lon_n(i  ,j+1) * (state%pv(i-1,j) + state%pv(i  ,j  ) + state%pv(i,j+1)) / 3.0_r8 +&
-                         state%mf_lon_n(i-1,j  ) * (state%pv(i-1,j) + state%pv(i-1,j-1) + state%pv(i,  j)) / 3.0_r8 +&
-                         state%mf_lon_n(i  ,j  ) * (state%pv(i-1,j) + state%pv(i  ,j  ) + state%pv(i,j-1)) / 3.0_r8) * 0.25_r8
+#ifdef V_POLE
+        tend%qhu(i,j) = (state%mf_lon_n(i-1,j-1) * (state%pv(i-1,j-1) + state%pv(i-1,j) + state%pv(i,j)) / 3.0_r8 +&
+                         state%mf_lon_n(i  ,j-1) * (state%pv(i  ,j-1) + state%pv(i-1,j) + state%pv(i,j)) / 3.0_r8 +&
+                         state%mf_lon_n(i-1,j  ) * (state%pv(i-1,j+1) + state%pv(i-1,j) + state%pv(i,j)) / 3.0_r8 +&
+                         state%mf_lon_n(i  ,j  ) * (state%pv(i  ,j+1) + state%pv(i-1,j) + state%pv(i,j)) / 3.0_r8) * 0.25_r8
+#else
+        tend%qhu(i,j) = (state%mf_lon_n(i-1,j+1) * (state%pv(i-1,j+1) + state%pv(i-1,j) + state%pv(i,j)) / 3.0_r8 +&
+                         state%mf_lon_n(i  ,j+1) * (state%pv(i  ,j+1) + state%pv(i-1,j) + state%pv(i,j)) / 3.0_r8 +&
+                         state%mf_lon_n(i-1,j  ) * (state%pv(i-1,j-1) + state%pv(i-1,j) + state%pv(i,j)) / 3.0_r8 +&
+                         state%mf_lon_n(i  ,j  ) * (state%pv(i  ,j-1) + state%pv(i-1,j) + state%pv(i,j)) / 3.0_r8) * 0.25_r8
+#endif
       end do
     end do
+
   end subroutine calc_qhu_qhv_2
 
   subroutine calc_dkedlon_dkedlat(state, tend, dt)
@@ -294,15 +349,20 @@ contains
     integer i, j
 
     mesh => state%mesh
+
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
         tend%dkedlon(i,j) = (state%ke(i+1,j) - state%ke(i,j)) / (radius * mesh%full_cos_lat(j) * mesh%dlon)
       end do
     end do
 
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
+#ifdef V_POLE
+        tend%dkedlat(i,j) = (state%ke(i,j) - state%ke(i,j-1)) / (radius * mesh%dlat)
+#else
         tend%dkedlat(i,j) = (state%ke(i,j+1) - state%ke(i,j)) / (radius * mesh%dlat)
+#endif
       end do
     end do     
 
@@ -319,6 +379,7 @@ contains
     integer i, j
 
     mesh => state%mesh
+
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
         tend%dpedlon(i,j) = (state%gd(i+1,j) -   state%gd(i,j) +&
@@ -327,11 +388,17 @@ contains
       end do
     end do
 
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-        tend%dpedlat(i,j) = (state%gd(i,j+1) - state%gd(i,j) +&
+#ifdef V_POLE
+        tend%dpedlat(i,j) = (state%gd(i,j) -   state%gd(i,j-1) +&
+                           static%ghs(i,j) - static%ghs(i,j-1)) /&
+                            (radius * mesh%dlat)
+#else
+        tend%dpedlat(i,j) = (state%gd(i,j+1) -   state%gd(i,j) +&
                            static%ghs(i,j+1) - static%ghs(i,j)) /&
                             (radius * mesh%dlat)
+#endif
       end do
     end do     
 
@@ -351,19 +418,25 @@ contains
 
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-        tend%dmfdlon(i,j) = (state%mf_lon_n(i+1,j) - state%mf_lon_n(i,j)) /&
+        tend%dmfdlon(i,j) = (state%mf_lon_n(i,j) - state%mf_lon_n(i-1,j)) /&
                            (radius * mesh%full_cos_lat(j) * mesh%dlon)
       end do
     end do
 
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
+#ifdef V_POLE
+        tend%dmfdlat(i,j) = (state%mf_lat_n(i,j+1) * mesh%half_cos_lat(j+1) - &
+                             state%mf_lat_n(i,j  ) * mesh%half_cos_lat(j  )) /&
+                             (radius * mesh%full_cos_lat(j) * mesh%dlat)
+#else
         tend%dmfdlat(i,j) = (state%mf_lat_n(i,j  ) * mesh%half_cos_lat(j  ) - &
                              state%mf_lat_n(i,j-1) * mesh%half_cos_lat(j-1)) /&
                              (radius * mesh%full_cos_lat(j) * mesh%dlat)
+#endif
       end do
     end do
-
+#ifndef V_POLE
     if (mesh%has_south_pole()) then
       j = mesh%full_lat_start_idx
       pole = 0.0_r8
@@ -380,13 +453,14 @@ contains
       j = mesh%full_lat_end_idx
       pole = 0.0_r8
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-        pole = pole - state%mf_lat_n(i,j-1)
+        pole = pole + state%mf_lat_n(i,j-1)
       end do
-      pole = pole * 4.0_r8 / mesh%num_full_lon / (radius * mesh%dlat)
+      pole = -pole * 4.0_r8 / mesh%num_full_lon / (radius * mesh%dlat)
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
         tend%dmfdlat(i,j) = pole
       end do
     end if
+#endif
   end subroutine calc_dmfdlon_dmfdlat
 
 subroutine test03()

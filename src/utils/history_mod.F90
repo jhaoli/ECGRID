@@ -27,6 +27,7 @@ module history_mod
   real(r8), allocatable, dimension(:,:) :: hs
 
 contains
+
   subroutine history_init()
     
     character(10) time_value, time_units
@@ -126,8 +127,12 @@ contains
     ! Convert wind from C grid to A grid 
     do j = state%mesh%full_lat_start_idx, state%mesh%full_lat_end_idx
       do i = state%mesh%full_lon_start_idx, state%mesh%full_lon_end_idx
-        u(i,j) = 0.5_r8 * (state%u(i,j) + state%u(i-1,j))
+#ifdef V_POLE
+        v(i,j) = 0.5_r8 * (state%v(i,j) + state%v(i,j+1))
+#else
         v(i,j) = 0.5_r8 * (state%v(i,j) + state%v(i,j-1))
+#endif
+        u(i,j) = 0.5_r8 * (state%u(i,j) + state%u(i-1,j))
         h(i,j) = (state%gd(i,j) + static%ghs(i,j)) / g
         hs(i,j) = static%ghs(i,j) / g
       end do

@@ -85,9 +85,13 @@ contains
 
     this%num_full_lon = num_lon
     this%num_half_lon = num_lon
+#ifdef V_POLE
+    this%num_full_lat = num_lat - 1
+    this%num_half_lat = num_lat
+#else
     this%num_full_lat = num_lat
     this%num_half_lat = num_lat - 1
-
+#endif
     this%full_lon_start_idx = 1
     this%full_lon_end_idx = this%num_full_lon
     this%full_lat_start_idx = 1
@@ -97,17 +101,22 @@ contains
     this%half_lat_start_idx = 1
     this%half_lat_end_idx = this%num_half_lat
 
-    this%halo_width = 1
+    this%halo_width = 2
     this%start_lon  = 0.0_r8
     this%end_lon    = pi2
     this%start_lat  = -pi05
     this%end_lat    = pi05
-
+#ifdef V_POLE
+    this%full_lat_start_idx_no_pole = this%full_lat_start_idx
+    this%full_lat_end_idx_no_pole   = this%full_lat_end_idx
+    this%half_lat_start_idx_no_pole = merge(this%half_lat_start_idx + 1, this%half_lat_start_idx, this%has_south_pole())
+    this%half_lat_end_idx_no_pole   = merge(this%half_lat_end_idx   - 1, this%half_lat_end_idx  , this%has_north_pole())
+#else
     this%full_lat_start_idx_no_pole = merge(this%full_lat_start_idx + 1, this%full_lat_start_idx, this%has_south_pole())
     this%full_lat_end_idx_no_pole   = merge(this%full_lat_end_idx   - 1, this%full_lat_end_idx  , this%has_north_pole())
     this%half_lat_start_idx_no_pole = this%half_lat_start_idx
     this%half_lat_end_idx_no_pole   = this%half_lat_end_idx
-
+#endif
     this%full_lon_lb = this%full_lon_start_idx - this%halo_width
     this%full_lon_ub = this%full_lon_end_idx   + this%halo_width
     this%full_lat_lb = this%full_lat_start_idx - 1
@@ -144,6 +153,21 @@ contains
       this%half_lon_deg(i) = this%half_lon(i) * deg
     end do
 
+#ifdef V_POLE
+    this%dlat = (this%end_lat - this%start_lat) / this%num_full_lat
+    do j = this%half_lat_lb, this%half_lat_ub
+      this%half_lat(j) = this%start_lat + (j - 1) * this%dlat
+      if (abs(this%half_lat(j)) < 1.0e-14) this%half_lat(j) = 0.0_r8
+      this%half_lat_deg(j) = this%half_lat(j) * deg
+    end do
+    this%half_lat(this%num_half_lat) = this%end_lat
+    this%half_lat_deg(this%num_half_lat) = this%end_lat * deg
+
+    do j = this%full_lat_lb, this%full_lat_ub
+      this%full_lat(j) = this%half_lat(j) + 0.5_r8 * this%dlat
+      this%full_lat_deg(j) = this%full_lat(j) * deg
+    end do
+#else
     this%dlat = (this%end_lat - this%start_lat) / this%num_half_lat
     do j = this%full_lat_lb, this%full_lat_ub
       this%full_lat(j) = this%start_lat + (j - 1) * this%dlat
@@ -156,6 +180,7 @@ contains
       this%half_lat(j) = this%full_lat(j) + 0.5_r8 * this%dlat
       this%half_lat_deg(j) = this%half_lat(j) * deg
     end do
+#endif
 
     do i = this%full_lon_lb, this%full_lon_ub
       this%full_cos_lon(i) = cos(this%full_lon(i))
@@ -181,6 +206,16 @@ contains
       end if
     end do
 
+#ifdef V_POLE
+    if (this%has_south_pole()) then
+      this%half_cos_lat(this%half_lat_start_idx) =  0.0_r8
+      this%half_sin_lat(this%half_lat_start_idx) = -1.0_r8
+    end if
+    if (this%has_north_pole()) then
+      this%half_cos_lat(this%half_lat_end_idx) = 0.0_r8
+      this%half_sin_lat(this%half_lat_end_idx) = 1.0_r8
+    end if
+#else
     if (this%has_south_pole()) then
       this%full_cos_lat(this%full_lat_start_idx) = 0.0_r8
       this%full_sin_lat(this%full_lat_start_idx) = -1.0_r8
@@ -190,6 +225,7 @@ contains
       this%full_cos_lat(this%full_lat_end_idx) = 0.0_r8
       this%full_sin_lat(this%full_lat_end_idx) = 1.0_r8
     end if
+#endif
 
     do j = this%full_lat_start_idx, this%full_lat_end_idx
       this%full_f(j) = 2.0_r8 * omega * this%full_sin_lat(j)
@@ -197,9 +233,9 @@ contains
     do j = this%half_lat_start_idx, this%half_lat_end_idx
       this%half_f(j) = 2.0_r8 * omega * this%half_sin_lat(j)
     end do
-    
+#ifndef V_POLE    
     call reset_cos_lat_at_poles(mesh)
-
+#endif
     call log_notice('Mesh module is initialized.')
 
   end subroutine mesh_init

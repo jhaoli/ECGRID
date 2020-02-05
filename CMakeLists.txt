@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.0.0 FATAL_ERROR)
 
 project(ecgrid LANGUAGES Fortran)
 
+option(V_POLE "Stagger V on the pole" OFF)
+
+if (V_POLE) 
+  add_definitions(-D V_POLE)
+endif()
+
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none -Ofast -fopenmp")
 endif ()

@@ -25,7 +25,7 @@ module time_mod
   public time_step
   public old_time_idx
   public new_time_idx
-  
+
   type alert_type
     type(timedelta_type) period
     type(datetime_type) last_time
@@ -35,14 +35,14 @@ module time_mod
   ! Namelist parameters
   integer, public :: start_time_array(5) = 0
   integer, public :: end_time_array(5) = 0
-  real(8), public :: run_days = 0
   real(8), public :: run_hours = 0
+  real(8), public :: run_days = 0
   real(8), public :: dt_in_seconds = 0.0
 
   type(datetime_type) start_time
   type(datetime_type) end_time
   type(datetime_type) curr_time
-  type(timedelta_type) dt 
+  type(timedelta_type) dt
   real(8) elapsed_seconds
   type(hash_table_type) alerts
   integer time_step
@@ -52,15 +52,28 @@ module time_mod
   character(30) curr_time_str
 
 contains
-  
+
   subroutine time_init()
-    
-    start_time = create_datetime(year=1, month=1, day=1, hour=0, minute=0)
-    
+
+    if (sum(start_time_array) > 0) then
+      start_time = create_datetime(year=start_time_array(1),  &
+                                   month=start_time_array(2), &
+                                   day=start_time_array(3),   &
+                                   hour=start_time_array(4),  &
+                                   minute=start_time_array(5))
+    else
+      start_time = create_datetime(year=1, month=1, day=1, hour=0, minute=0)
+    end if
     if (run_days > 0 .or. run_hours > 0) then
       end_time = start_time + timedelta(days=run_days, hours=run_hours)
-    end if 
-    
+    else if (sum(end_time_array) > 0) then
+      end_time = create_datetime(year=end_time_array(1),  &
+                                 month=end_time_array(2), &
+                                 day=end_time_array(3),   &
+                                 hour=end_time_array(4),  &
+                                 minute=end_time_array(5))
+    end if
+
     time_step = 0
     elapsed_seconds = 0
     old_time_idx = 1
@@ -70,12 +83,12 @@ contains
     curr_time = start_time
 
     start_time_str = start_time%format('%Y-%m-%dT%H_%M_%S')
-    curr_time_str = curr_time%format('%Y-%m-%dT%H%_%M_%S')
+    curr_time_str = curr_time%format('%Y-%m-%dT%H_%M_%S')
 
     alerts = hash_table()
 
   end subroutine time_init
-  
+
   subroutine time_reset_start_time(time)
 
     type(datetime_type), intent(in) :: time
@@ -101,8 +114,8 @@ contains
   subroutine time_advance()
     
     type(hash_table_iterator_type) iter
-    
-    ! Update alerts
+
+    ! Update alerts.
     iter = hash_table_iterator(alerts)
     do while (.not. iter%ended())
       select type (alert => iter%value)
@@ -110,10 +123,10 @@ contains
         if (alert%ring) then
           alert%last_time = curr_time
           alert%ring = .false.
-        end if 
+        end if
       end select
       call iter%next()
-    end do 
+    end do
 
     call time_swap_indices(old_time_idx, new_time_idx)
 
@@ -123,7 +136,7 @@ contains
     curr_time_str = curr_time%format('%Y-%m-%dT%H_%M_%S')
 
   end subroutine time_advance
-  
+
   real(8) function time_elapsed_seconds() result(res)
 
     res = elapsed_seconds
@@ -135,9 +148,9 @@ contains
     res = curr_time >= end_time
 
   end function time_is_finished
-  
+
   subroutine time_add_alert(name, months, days, hours, minutes, seconds)
-    
+
     character(*), intent(in)           :: name
     real(r8)    , intent(in), optional :: months
     real(r8)    , intent(in), optional :: days
@@ -185,7 +198,7 @@ contains
   end subroutine time_add_alert
 
   function time_is_alerted(name) result(res)
-  
+
     character(*), intent(in) :: name
     logical res
 
@@ -193,9 +206,9 @@ contains
     type(datetime_type) time
 
     alert => get_alert(name)
-    if(associated(alert)) then
+    if (associated(alert)) then
       time = alert%last_time + alert%period
-      if (time >= curr_time) then
+      if (time <= curr_time) then
         alert%ring = .true.
         res = .true.
       else
@@ -208,7 +221,7 @@ contains
   end function time_is_alerted
 
   function get_alert(name) result(res)
-    
+
     character(*), intent(in) :: name
     type(alert_type), pointer :: res
 

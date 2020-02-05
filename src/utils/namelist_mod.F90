@@ -13,8 +13,8 @@ module namelist_mod
   integer :: num_lat
 
 
-  character(30) :: time_scheme
-  character(39) :: split_scheme
+  character(30) :: time_scheme  = 'pc2'
+  character(39) :: split_scheme = ''
 
   namelist /ecgrid_swm_control/ &
     case_name                 , &

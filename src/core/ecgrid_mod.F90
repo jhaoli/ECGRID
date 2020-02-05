@@ -24,12 +24,11 @@ module ecgrid_mod
   integer, parameter :: all_pass = 0
 
   interface
-    subroutine integrator_interface(dt, static, tends, states, old, new, pass)
-      
+    subroutine integrator_interface(dt, static, tends, states, old, new, pass)     
       import r8, static_type, tend_type, state_type
       real(r8)         , intent(in   ) :: dt
       type(static_type), intent(in   ) :: static
-      type(tend_type  ), intent(inout) :: tends(:)
+      type(tend_type  ), intent(inout) :: tends (:)
       type(state_type ), intent(inout) :: states(:)
       integer          , intent(in   ) :: old
       integer          , intent(in   ) :: new
@@ -109,7 +108,7 @@ contains
 
     if (time_is_alerted('history_write')) then
       call history_write_state(static, state)
-      call history_write_debug(static, state, tend)
+      ! call history_write_debug(static, state, tend)
     end if
   end subroutine output
 
@@ -119,7 +118,6 @@ contains
     
     type(mesh_type), pointer :: mesh
     integer i, j
-    real(r8) m_vtx
 
     mesh => state%mesh
 
@@ -135,18 +133,15 @@ contains
     state%total_e = 0.0_r8
     do j = mesh%full_lat_start_idx, mesh%full_lat_end_idx
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-        state%total_e = state%total_e + (state%gd(i,j)**2 * 0.5_r8 + state%gd(i,j) * state%ke(i,j) + static%ghs(i,j)) * mesh%full_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat 
+        state%total_e = state%total_e + (state%gd(i,j) * state%ke(i,j) + state%gd(i,j) * (0.5_r8 * state%gd(i,j) + static%ghs(i,j))) * mesh%full_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat 
       end do
     end do
-    
     call log_add_diag('total_e' , state%total_e)
 
     state%total_pv = 0.0_r8
     do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        m_vtx = (state%gd(i,j  ) + state%gd(i+1,j  )  +&
-                 state%gd(i,j+1) + state%gd(i+1,j+1)) * 0.25_r8
-        state%total_pv = state%total_pv + m_vtx * state%pv(i,j) * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
+        state%total_pv = state%total_pv + state%m_vtx(i,j) * state%pv(i,j) * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
       end do
     end do
     call log_add_diag('total_pv' , state%total_pv)
@@ -154,13 +149,11 @@ contains
     state%total_pe = 0.0_r8
     do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        m_vtx = (state%gd(i,j  ) + state%gd(i+1,j  )  +&
-                 state%gd(i,j+1) + state%gd(i+1,j+1)) * 0.25_r8
-        state%total_pe = state%total_pe + m_vtx * state%pv(i,j)**2 * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
+        state%total_pe = state%total_pe + state%m_vtx(i,j) * state%pv(i,j)**2 * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
       end do
     end do
     call log_add_diag('total_pe' , state%total_pe)
-    
+
   end subroutine diagnose
 
   subroutine space_operators(static, state, tend, dt, pass)
@@ -186,11 +179,11 @@ contains
   
       do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
         do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-          tend%du(i,j) =  tend%qhv(i,j) - tend%dpedlon(i,j) - tend%dkedlon(i,j)
+          tend%du(i,j) =   tend%qhv(i,j) - tend%dpedlon(i,j) - tend%dkedlon(i,j)
         end do
       end do
 
-      do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+      do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
         do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
           tend%dv(i,j) = - tend%qhu(i,j) - tend%dpedlat(i,j) - tend%dkedlat(i,j)
         end do
@@ -222,7 +215,7 @@ contains
   
     real(r8)         , intent(in)    :: dt
     type(static_type), intent(in)    :: static
-    type(tend_type  ), intent(inout) :: tends(:)
+    type(tend_type  ), intent(inout) :: tends (:)
     type(state_type ), intent(inout) :: states(:) 
 
     call integrator(dt, static, tends, states, old, new, all_pass)
@@ -233,7 +226,7 @@ contains
     
     real(r8)         , intent(in   ) :: dt
     type(static_type), intent(in   ) :: static
-    type(tend_type  ), intent(inout) :: tends(:)
+    type(tend_type  ), intent(inout) :: tends (:)
     type(state_type ), intent(inout) :: states(:)
     integer          , intent(in   ) :: old
     integer          , intent(in   ) :: new
@@ -279,12 +272,13 @@ contains
     end do
     call parallel_fill_halo(mesh, new_state%u)
 
-    do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
         new_state%v(i,j) = old_state%v(i,j) + dt * tend%dv(i,j)
       end do
     end do
-    call parallel_fill_halo(mesh, new_state%u)
+    call parallel_fill_halo(mesh, new_state%v)
 
   end subroutine update_state
+
 end module ecgrid_mod
