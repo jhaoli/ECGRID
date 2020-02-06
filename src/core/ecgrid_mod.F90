@@ -75,7 +75,7 @@ contains
       call log_notice('No fast-slow split.')
     end select
     
-    call time_add_alert('print', days=1.0_r8)
+    call time_add_alert('print', hours=1.0_r8)
 
   end subroutine ecgrid_init
   

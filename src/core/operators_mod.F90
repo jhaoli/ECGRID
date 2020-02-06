@@ -348,24 +348,21 @@ contains
 
     type(mesh_type), pointer :: mesh
     integer i, j
-    real(r8) mesh_dlon, mesh_dlat
 
     mesh => state%mesh
 
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
-      mesh_dlon = radius * mesh%full_cos_lat(j) * mesh%dlon
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        tend%dkedlon(i,j) = (state%ke(i+1,j) - state%ke(i,j)) / mesh_dlon
+        tend%dkedlon(i,j) = (state%ke(i+1,j) - state%ke(i,j)) / mesh%full_dlon(j)
       end do
     end do
     
-    mesh_dlat = radius * mesh%dlat
     do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
 #ifdef V_POLE
-        tend%dkedlat(i,j) = (state%ke(i,j) - state%ke(i,j-1)) / mesh_dlat
+        tend%dkedlat(i,j) = (state%ke(i,j) - state%ke(i,j-1)) / (radius * mesh%dlat)
 #else
-        tend%dkedlat(i,j) = (state%ke(i,j+1) - state%ke(i,j)) / mesh_dlat
+        tend%dkedlat(i,j) = (state%ke(i,j+1) - state%ke(i,j)) / (radius * mesh%dlat)
 #endif
       end do
     end do     
@@ -381,27 +378,24 @@ contains
 
     type(mesh_type), pointer :: mesh
     integer i, j
-    real(r8) mesh_dlon, mesh_dlat
 
     mesh => state%mesh
 
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
-      mesh_dlon = radius * mesh%full_cos_lat(j) * mesh%dlon
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
         tend%dpedlon(i,j) = (state%gd(i+1,j) -   state%gd(i,j) +&
-                           static%ghs(i+1,j) - static%ghs(i,j)) / mesh_dlon
+                           static%ghs(i+1,j) - static%ghs(i,j)) / mesh%full_dlon(j)
       end do
     end do
     
-    mesh_dlat = radius * mesh%dlat
     do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
 #ifdef V_POLE
         tend%dpedlat(i,j) = (state%gd(i,j) -   state%gd(i,j-1) +&
-                           static%ghs(i,j) - static%ghs(i,j-1)) / mesh_dlat
+                           static%ghs(i,j) - static%ghs(i,j-1)) / (radius * mesh%dlat)
 #else
         tend%dpedlat(i,j) = (state%gd(i,j+1) -   state%gd(i,j) +&
-                           static%ghs(i,j+1) - static%ghs(i,j)) / mesh_dlat
+                           static%ghs(i,j+1) - static%ghs(i,j)) / (radius * mesh%dlat)
 #endif
       end do
     end do     
@@ -417,26 +411,23 @@ contains
     type(mesh_type), pointer :: mesh
     integer i, j
     real(r8) pole
-    real(r8) mesh_dlon, mesh_dlat
 
     mesh => state%mesh
 
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
-      mesh_dlon = radius * mesh%full_cos_lat(j) * mesh%dlon
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-        tend%dmfdlon(i,j) = (state%mf_lon_n(i,j) - state%mf_lon_n(i-1,j)) / mesh_dlon
+        tend%dmfdlon(i,j) = (state%mf_lon_n(i,j) - state%mf_lon_n(i-1,j)) / mesh%full_dlon(j)
       end do
     end do
 
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
-      mesh_dlat = radius * mesh%full_cos_lat(j) * mesh%dlat
       do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
 #ifdef V_POLE
         tend%dmfdlat(i,j) = (state%mf_lat_n(i,j+1) * mesh%half_cos_lat(j+1) - &
-                             state%mf_lat_n(i,j  ) * mesh%half_cos_lat(j  )) / mesh_dlat
+                             state%mf_lat_n(i,j  ) * mesh%half_cos_lat(j  )) / mesh%full_dlat(j)
 #else
         tend%dmfdlat(i,j) = (state%mf_lat_n(i,j  ) * mesh%half_cos_lat(j  ) - &
-                             state%mf_lat_n(i,j-1) * mesh%half_cos_lat(j-1)) / mesh_dlat
+                             state%mf_lat_n(i,j-1) * mesh%half_cos_lat(j-1)) / mesh%full_dlat(j)
 #endif
       end do
     end do
@@ -466,56 +457,5 @@ contains
     end if
 #endif
   end subroutine calc_dmfdlon_dmfdlat
-
-subroutine test03()
-
-  INTEGER,parameter :: N=5
-  integer:: LDA, LDB
-  INTEGER :: NRHS
-  INTEGER :: INFO
-  INTEGER :: IPIV(N)
-  REAL(r8) :: A(N,N), B(N)
-  
-  integer i,j
-
-  LDA=N;LDB=N
-  NRHS=1
-  
-  ! A=reshape((/2.0,4.0,&
-  !             3.0,-1.5/),(/2,2/))
-  ! A = reshape([2.0, 4.0 , 1.0,&
-  !              3.0, -1.5, 4.0,&
-  !              4.0, -2.0, -5.0], (/3,3/))
-  ! B = reshape((/20.0,-5.0,-6.0/),(/3,1/))
-
-  do i = 1, n 
-    do j = 1, n
-      if( i == j) then 
-        a(i,j) = -1.0
-    	else if(i-j == 1) then 
-        a(i,j) = 1.0
-      else
-        a(i,j) = 0.0
-      end if 
-    end do
-  end do 
-  a(1,n)=1
-  do j=1,n
-  write(*,100)  (a(i,j),i=1,n)
-  end do
-
-100 format(5f10.2)
-
-  b(1) = 1.0
-  b(2:n-1) = 0.0
-  b(n) = 1.0
-
-  call DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-  
-  write(*,*) "Solution:"
-  write(*,'(f8.3)') B
-  write(*,*) "INFO=", INFO
-
-end subroutine test03
 
 end module operators_mod

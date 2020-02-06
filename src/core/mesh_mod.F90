@@ -43,6 +43,8 @@ module mesh_mod
     real(r8) end_lat
     real(r8) dlon
     real(r8) dlat
+    real(r8), allocatable :: full_dlon(:)
+    real(r8), allocatable :: full_dlat(:)
     real(r8), allocatable :: full_lon(:)
     real(r8), allocatable :: half_lon(:)
     real(r8), allocatable :: full_lat(:)
@@ -144,6 +146,8 @@ contains
     allocate(this%half_lat_deg  (this%half_lat_lb:this%half_lat_ub))
     allocate(this%full_f        (this%full_lat_lb:this%full_lat_ub))
     allocate(this%half_f        (this%half_lat_lb:this%half_lat_ub))
+    allocate(this%full_dlon     (this%full_lat_lb:this%full_lat_ub))
+    allocate(this%full_dlat     (this%full_lat_lb:this%full_lat_ub))
 
     this%dlon = (this%end_lon - this%start_lon) / this%num_full_lon
     do i = this%full_lon_lb, this%full_lon_ub
@@ -233,6 +237,14 @@ contains
     do j = this%half_lat_start_idx, this%half_lat_end_idx
       this%half_f(j) = 2.0_r8 * omega * this%half_sin_lat(j)
     end do
+
+    do j = this%full_lat_start_idx, this%full_lat_end_idx
+      this%full_dlon(j) = radius * this%full_cos_lat(j) * this%dlon
+    end do
+    do j = this%full_lat_start_idx, this%full_lat_end_idx
+      this%full_dlat(j) = radius * this%full_cos_lat(j) * this%dlat
+    end do
+
 #ifndef V_POLE    
     call reset_cos_lat_at_poles(mesh)
 #endif
@@ -278,6 +290,8 @@ contains
     if (allocated(this%half_lat_deg       )) deallocate(this%half_lat_deg )
     if (allocated(this%full_f             )) deallocate(this%full_f       )
     if (allocated(this%half_f             )) deallocate(this%half_f       )
+    if (allocated(this%full_dlon          )) deallocate(this%full_dlon    )
+    if (allocated(this%full_dlat          )) deallocate(this%full_dlat    )
   end subroutine mesh_final
   
   subroutine reset_cos_lat_at_poles(this)
