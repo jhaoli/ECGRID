@@ -24,7 +24,7 @@ module ecgrid_mod
   integer, parameter :: all_pass = 0
 
   interface
-    subroutine integrator_interface(dt, static, tends, states, old, new, pass)     
+    subroutine integrator_interface(dt, static, tends, states, old, new)     
       import r8, static_type, tend_type, state_type
       real(r8)         , intent(in   ) :: dt
       type(static_type), intent(in   ) :: static
@@ -32,7 +32,6 @@ module ecgrid_mod
       type(state_type ), intent(inout) :: states(:)
       integer          , intent(in   ) :: old
       integer          , intent(in   ) :: new
-      integer          , intent(in   ) :: pass
     end subroutine integrator_interface
 
     subroutine splitter_interface(dt, static, tends, states)
@@ -168,13 +167,12 @@ contains
 
   end subroutine diagnose
 
-  subroutine space_operators(static, state, tend, dt, pass)
+  subroutine space_operators(static, state, tend, dt)
     
     type(static_type), intent(in   ) :: static
     type(state_type) , intent(inout) :: state
     type(tend_type)  , intent(inout) :: tend
     real(r8)         , intent(in   ) :: dt 
-    integer          , intent(in   ) :: pass
 
     type(mesh_type), pointer :: mesh 
     integer i, j
@@ -182,31 +180,28 @@ contains
     call operators_prepare(state)
 
     mesh => state%mesh
-    select case(pass)
-    case (all_pass)
-      call calc_qhu_qhv_2(state, tend, dt)
-      call calc_dkedlon_dkedlat(state, tend, dt)
-      call calc_dpedlon_dpedlat(static, state, tend, dt)
-      call calc_dmfdlon_dmfdlat(state, tend, dt)
-  
-      do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
-        do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-          tend%du(i,j) =   tend%qhv(i,j) - tend%dpedlon(i,j) - tend%dkedlon(i,j)
-        end do
-      end do
+    call calc_qhu_qhv_2(state, tend, dt)
+    call calc_dkedlon_dkedlat(state, tend, dt)
+    call calc_dpedlon_dpedlat(static, state, tend, dt)
+    call calc_dmfdlon_dmfdlat(state, tend, dt)
 
-      do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
-        do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-          tend%dv(i,j) = - tend%qhu(i,j) - tend%dpedlat(i,j) - tend%dkedlat(i,j)
-        end do
+    do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
+      do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
+        tend%du(i,j) =   tend%qhv(i,j) - tend%dpedlon(i,j) - tend%dkedlon(i,j)
       end do
+    end do
 
-      do j = mesh%full_lat_start_idx, mesh%full_lat_end_idx
-        do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
-          tend%dgd(i,j) = - tend%dmfdlon(i,j) - tend%dmfdlat(i,j)
-        end do
+    do j = mesh%half_lat_start_idx_no_pole, mesh%half_lat_end_idx_no_pole
+      do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
+        tend%dv(i,j) = - tend%qhu(i,j) - tend%dpedlat(i,j) - tend%dkedlat(i,j)
       end do
-    end select
+    end do
+
+    do j = mesh%full_lat_start_idx, mesh%full_lat_end_idx
+      do i = mesh%full_lon_start_idx, mesh%full_lon_end_idx
+        tend%dgd(i,j) = - tend%dmfdlon(i,j) - tend%dmfdlat(i,j)
+      end do
+    end do
   
     ! call debug_check_space_operators(static, state, tend)
 
@@ -230,11 +225,11 @@ contains
     type(tend_type  ), intent(inout) :: tends (:)
     type(state_type ), intent(inout) :: states(:) 
 
-    call integrator(dt, static, tends, states, old, new, all_pass)
+    call integrator(dt, static, tends, states, old, new)
 
   end subroutine no_splitting
 
-  subroutine predict_correct(dt, static, tends, states, old, new, pass)
+  subroutine predict_correct(dt, static, tends, states, old, new)
     
     real(r8)         , intent(in   ) :: dt
     type(static_type), intent(in   ) :: static
@@ -242,22 +237,84 @@ contains
     type(state_type ), intent(inout) :: states(:)
     integer          , intent(in   ) :: old
     integer          , intent(in   ) :: new
-    integer          , intent(in   ) :: pass
 
     ! Do first predict step.
-    call space_operators(static, states(old), tends(old), 0.5_r8 * dt, pass)
+    call space_operators(static, states(old), tends(old), 0.5_r8 * dt)
     call update_state(0.5_r8 * dt, tends(old), states(old), states(new))
 
     ! Do second predict step.
-    call space_operators(static, states(new), tends(old), 0.5_r8 * dt, pass)
+    call space_operators(static, states(new), tends(old), 0.5_r8 * dt)
     call update_state(0.5_r8 * dt, tends(old), states(old), states(new))
 
     ! Do correct stepe
-    call space_operators(static, states(new), tends(new),          dt, pass)
+    call space_operators(static, states(new), tends(new),          dt)
     call update_state(         dt, tends(new), states(old), states(new))
 
   end subroutine predict_correct
-  
+
+  subroutine runge_kutta_3rd(dt, static, tends, states, old, new)
+
+    real(r8)         , intent(in   ) :: dt 
+    type(static_type), intent(in   ) :: static 
+    type(tend_type  ), intent(inout) :: tends(:)
+    type(state_type ), intent(inout) :: states(:)
+    integer          , intent(in   ) :: old
+    integer          , intent(in   ) :: new 
+
+    integer s1, s2, s3
+
+    s1 = 3
+    s2 = 4
+    s3 = new 
+
+    call space_operators(static, states(old), tends(s1), 0.5_r8 * dt)
+    call update_state(0.5_r8 * dt, tends(s1), states(old), states(s1))
+
+    call space_operators(static, states(s1), tends(s2), 2.0_r8 * dt)
+    call update_state (-dt, tends(s1), states(old), states(s2))
+    call update_state (2.0_r8 * dt, tends(s2), states(s2), states(s2))
+
+    call space_operators(static, states(s2), tends(s3), dt)
+    tends(old)%du  = (tends(s1)%du  + 4.0_r8 * tends(s2)%du  + tends(s3)%du ) / 6.0_r8
+    tends(old)%dv  = (tends(s1)%dv  + 4.0_r8 * tends(s2)%dv  + tends(s3)%dv ) / 6.0_r8
+    tends(old)%dgd = (tends(s1)%dgd + 4.0_r8 * tends(s2)%dgd + tends(s3)%dgd) / 6.0_r8
+    call update_state(dt, tends(old), states(old), states(new))
+
+  end subroutine runge_kutta_3rd
+
+  subroutine runge_kutta_4th(dt, static, tends, states, old, new)
+    
+    real(r8)         , intent(in   ) :: dt 
+    type(static_type), intent(in   ) :: static 
+    type(tend_type  ), intent(inout) :: tends(:)
+    type(state_type ), intent(inout) :: states(:)
+    integer          , intent(in   ) :: old
+    integer          , intent(in   ) :: new 
+
+    integer s1, s2, s3, s4
+
+    s1 = 3
+    s2 = 4
+    s3 = 5
+    s4 = new 
+
+    call space_operators(static, states(old), tends(s1), 0.5_r8 * dt)
+    call update_state(0.5_r8 * dt, tends(s1), states(old), states(s1))
+
+    call space_operators(static, states(s1), tends(s2), 0.5_r8 * dt)
+    call update_state (0.5_r8 * dt, tends(s2), states(old), states(s2))
+
+    call space_operators(static, states(s2), tends(s3), 0.5_r8 * dt)
+    call update_state (         dt, tends(s3), states(old), states(s3))
+
+    call space_operators(static, states(s3), tends(s4), dt)
+    tends(old)%du  = (tends(s1)%du  + 2.0_r8 * tends(s2)%du  + 2.0_r8 * tends(s3)%du  + tends(s4)%du ) / 6.0_r8
+    tends(old)%dv  = (tends(s1)%dv  + 2.0_r8 * tends(s2)%dv  + 2.0_r8 * tends(s3)%dv  + tends(s4)%dv ) / 6.0_r8
+    tends(old)%dgd = (tends(s1)%dgd + 2.0_r8 * tends(s2)%dgd + 2.0_r8 * tends(s3)%dgd + tends(s4)%dgd) / 6.0_r8
+    call update_state(dt, tends(old), states(old), states(new))
+
+  end subroutine runge_kutta_4th
+
   subroutine update_state(dt, tend, old_state, new_state)
     
     real(r8)        , intent(in   ) :: dt

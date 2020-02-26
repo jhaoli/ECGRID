@@ -55,6 +55,10 @@ contains
       select case (trim(time_scheme))
       case ('pc2')
         allocate(states(3))
+      case ('rk3')
+        allocate(states(4))
+      case ('rk4')
+        allocate(states(5))
       case default
         call log_error('Wrong time scheme!')
       end select
