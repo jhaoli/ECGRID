@@ -14,7 +14,7 @@ module namelist_mod
 
 
   character(30) :: time_scheme  = 'pc2'
-  character(39) :: split_scheme = ''
+  integer       :: coriolis_scheme = 2
 
   namelist /ecgrid_swm_control/ &
     case_name                 , &
@@ -26,7 +26,7 @@ module namelist_mod
     run_days                  , &
     history_interval          , &
     time_scheme               , &
-    split_scheme     
+    coriolis_scheme              
 
 contains
   

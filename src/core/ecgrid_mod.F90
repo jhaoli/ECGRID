@@ -66,13 +66,7 @@ contains
       call log_notice('Use pc2 integrator.')
     end select
    
-    select case (split_scheme)
-    ! case ('pc2')
-    !   splitter => csp2_splitting
-    case default
-      splitter => no_splitting
-      call log_notice('No fast-slow split.')
-    end select
+    splitter => no_splitting
     
     call time_add_alert('print', hours=1.0_r8)
 
@@ -160,7 +154,7 @@ contains
     state%total_pe = 0.0_r8
     do j = mesh%half_lat_start_idx, mesh%half_lat_end_idx
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
-        state%total_pe = state%total_pe + 0.5_r8 * state%m_vtx(i,j) * state%pv(i,j)**2 * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
+        state%total_pe = state%total_pe + 0.5_r8 * state%m_vtx(i,j) * state%pv(i,j)**2 * g * mesh%half_cos_lat(j) * radius**2 * mesh%dlon * mesh%dlat
       end do
     end do
     call log_add_diag('total_pe' , state%total_pe)
@@ -180,7 +174,16 @@ contains
     call operators_prepare(state)
 
     mesh => state%mesh
-    call calc_qhu_qhv_2(state, tend, dt)
+
+    select case (coriolis_scheme)
+    case (1)
+      call calc_qhu_qhv(state, tend, dt)
+    case (2)
+      call calc_qhu_qhv_2(state, tend, dt)
+    case default
+      call calc_qhu_qhv_2(state, tend, dt)
+    end select
+      
     call calc_dkedlon_dkedlat(state, tend, dt)
     call calc_dpedlon_dpedlat(static, state, tend, dt)
     call calc_dmfdlon_dmfdlat(state, tend, dt)

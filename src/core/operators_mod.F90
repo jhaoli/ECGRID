@@ -251,7 +251,7 @@ contains
   end subroutine calc_mf_lon_n_north_pole
 
   subroutine calc_qhu_qhv(state, tend, dt)
-    
+    ! potential enstrophy conserving, but not energy
     type(state_type), intent(inout) :: state
     type(tend_type ), intent(inout) :: tend
     real(r8)        , intent(in   ) :: dt
@@ -265,9 +265,15 @@ contains
 
     do j = mesh%full_lat_start_idx_no_pole, mesh%full_lat_end_idx_no_pole
       do i = mesh%half_lon_start_idx, mesh%half_lon_end_idx
+#ifdef V_POLE
+        tend%qhv(i,j) = state%pv_lon(i,j) * ((state%mf_lat_n(i,j  ) + state%mf_lat_n(i+1,j  )) * mesh%half_cos_lat(j  ) +&
+                                             (state%mf_lat_n(i,j+1) + state%mf_lat_n(i+1,j+1)) * mesh%half_cos_lat(j+1)) * 0.25_r8 / &
+                        mesh%full_cos_lat(j)
+#else
         tend%qhv(i,j) = state%pv_lon(i,j) * ((state%mf_lat_n(i,j  ) + state%mf_lat_n(i+1,j  )) * mesh%half_cos_lat(j  ) + &
                                              (state%mf_lat_n(i,j-1) + state%mf_lat_n(i+1,j-1)) * mesh%half_cos_lat(j-1)) * 0.25_r8 / &
                         mesh%full_cos_lat(j)
+#endif
       end do
     end do
 
@@ -285,7 +291,7 @@ contains
   end subroutine calc_qhu_qhv
 
   subroutine calc_qhu_qhv_2(state, tend, dt)
-    
+    ! enengy and potential enstrophy conserving scheme
     type(state_type), intent(inout) :: state
     type(tend_type ), intent(inout) :: tend
     real(r8)        , intent(in   ) :: dt
