@@ -7,6 +7,6 @@ The following test cases are provided:
 
 (1) Mountain zonal flow
 
-(2)Rossby-Haurwitz wave
+(2) Rossby-Haurwitz wave
 
 (3) Cross pole flow
