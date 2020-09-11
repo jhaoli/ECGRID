@@ -6,6 +6,7 @@ option(V_POLE "Stagger V on the pole" OFF)
 
 if (V_POLE) 
   add_definitions(-D V_POLE)
+  message(STATUS "Stagger V on poles.")
 endif()
 
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
