@@ -8,6 +8,7 @@ program ecgrid_swm_driver
   use mountain_zonal_flow_test_mod
   use rossby_haurwitz_wave_test_mod
   use cross_pole_flow_test_mod
+  use jet_zonal_flow_test_mod
 
   implicit none
 
@@ -38,6 +39,8 @@ program ecgrid_swm_driver
     set_initial_condition => rossby_haurwitz_wave_test_set_initial_condition
   case ('cross_pole_flow')
     set_initial_condition => cross_pole_flow_test_set_initial_condition
+  case ('jet_zonal_flow')
+    set_initial_condition => jet_zonal_flow_test_set_initial_condition
   case default
     call log_error('Unknown test case ' // trim(test_case) // '!')
   end select

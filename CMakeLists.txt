@@ -68,6 +68,8 @@ set(source_files
   src/tests/swm/mountain_zonal_flow_test_mod.F90
   src/tests/swm/rossby_haurwitz_wave_test_mod.F90
   src/tests/swm/cross_pole_flow_test_mod.F90
+  src/tests/swm/jet_zonal_flow_test_mod.F90
+  lib/quadpack.f90
 )
 
 add_library(ecgrid ${source_files})
