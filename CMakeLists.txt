@@ -65,6 +65,7 @@ set(source_files
   src/core/pv_mod.F90
   src/core/ke_mod.F90
   src/core/ecgrid_mod.F90
+  src/tests/swm/steady_geostrophic_flow_test_mod.F90
   src/tests/swm/mountain_zonal_flow_test_mod.F90
   src/tests/swm/rossby_haurwitz_wave_test_mod.F90
   src/tests/swm/cross_pole_flow_test_mod.F90

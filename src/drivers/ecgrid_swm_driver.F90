@@ -5,6 +5,7 @@ program ecgrid_swm_driver
   use static_mod
   use state_mod
   use ecgrid_mod
+  use steady_geostrophic_flow_test_mod
   use mountain_zonal_flow_test_mod
   use rossby_haurwitz_wave_test_mod
   use cross_pole_flow_test_mod
@@ -33,6 +34,8 @@ program ecgrid_swm_driver
   call ecgrid_init()
 
   select case (test_case)
+  case ('steady_geostrophic_flow')
+    set_initial_condition => steady_geostrophic_flow_test_set_initial_condition
   case ('mountain_zonal_flow')
     set_initial_condition => mountain_zonal_flow_test_set_initial_condition
   case ('rossby_haurwitz_wave')
