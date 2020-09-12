@@ -5,8 +5,10 @@ It is developed on regular latitude-longitude grid, and I also extend it both fo
 
 The following test cases are provided:
 
-(1) Mountain zonal flow
+(1) Mountain zonal flow (Williamson,1992)
 
-(2) Rossby-Haurwitz wave
+(2) Rossby-Haurwitz wave (Williamson,1992)
 
-(3) Cross pole flow
+(3) Cross pole flow (McDonald and Bates,1989)
+
+(4)Jet_zonal_flow (Galewsky,2004)
